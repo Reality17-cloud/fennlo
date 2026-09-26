@@ -95,7 +95,10 @@ export function App() {
     try {
       const response = await fetch('/api/experiences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intent: value.trim() }), signal: controller.current.signal });
       const data = await readJsonResponse<{ experience?: Experience; error?: string }>(response);
-      if (!response.ok || !data.experience) throw new Error(data.error || 'The experience could not be created. Please try again.');
+      if (!response.ok || !data.experience) {
+        const message = data.experience?.error || data.error || 'The experience could not be created. Please try again.';
+        throw new Error(message);
+      }
       const next = data.experience;
       const parsed = experienceSpecSchema.safeParse(next.spec);
       if (!parsed.success) throw new Error('The explanation could not be displayed. Please try your question again.');
