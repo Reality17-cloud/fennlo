@@ -49,10 +49,13 @@ export class GeminiGenerativeProvider implements GenerativeProvider {
     try {
       const response = await this.request(`https://generativelanguage.googleapis.com/v1/models/${this.options.model}:generateContent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey }, signal: AbortSignal.timeout(this.options.timeoutMs),
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions(this.options.maxPoints) }] }, contents: [{ role: 'user', parts: [{ text: intent }] }], generationConfig: {
-          candidateCount: 1, responseModalities: ['TEXT', 'IMAGE'], maxOutputTokens: 4096,
-          responseFormat: { image: { aspectRatio: this.options.aspectRatio, imageSize: this.options.imageSize } },
-        } }),
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: instructions(this.options.maxPoints) + '\n\nUSER QUESTION:\n' + intent }],
+          }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        }),
       });
       if (!response.ok) {
         const code: GeminiFailureCode =
