@@ -17,7 +17,7 @@ export interface HttpOptions { ownerToken?: string; production?: boolean; refere
 export function createHttpApp(application: Application, options: HttpOptions = {}) {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', false);
+  app.set('trust proxy', options.production ? 1 : false);
 
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -25,7 +25,7 @@ export function createHttpApp(application: Application, options: HttpOptions = {
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     if (options.production) res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
-    if (!['localhost', '127.0.0.1', '[::1]'].includes(req.hostname)) return res.status(403).json({ error: 'This application is available locally.' });
+    if (!options.production && !['localhost', '127.0.0.1', '[::1]'].includes(req.hostname)) return res.status(403).json({ error: 'This application is available locally.' });
     next();
   });
 
