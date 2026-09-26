@@ -2,6 +2,21 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { GenerativeViewport } from './runtime/Runtime';
 import { experienceSpecSchema, type Experience } from './shared/spec';
 
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+  const body = await response.text();
+  if (!contentType.includes('application/json')) {
+    const snippet = body.trim().replace(/\s+/g, ' ').slice(0, 120);
+    throw new Error(
+      response.status === 404
+        ? 'Fennlo API is not deployed on this host yet.'
+        : `Fennlo API returned an unexpected response${snippet ? `: ${snippet}` : '.'}`,
+    );
+  }
+  try { return JSON.parse(body) as T; }
+  catch { throw new Error('Fennlo API returned invalid JSON.'); }
+}
+
 const suggestions = [
   { question: 'Why do seasons happen?', icon: 'sun' },
   { question: 'How does a CPU execute an instruction?', icon: 'chip' },
@@ -45,13 +60,13 @@ export function App() {
 
   useEffect(() => {
     const startup = new AbortController();
-    fetch('/api/status', { signal: startup.signal }).then(r => r.ok ? r.json() : Promise.reject()).then((data: { provider: string }) => setProvider(data.provider)).catch(() => {});
+    fetch('/api/status', { signal: startup.signal }).then(async r => { if (!r.ok) throw new Error('status unavailable'); return readJsonResponse<{ provider: string }>(r); }).then(data => setProvider(data.provider)).catch(() => {});
     const id = new URLSearchParams(location.search).get('experience');
     if (id && /^[a-zA-Z0-9_-]{1,100}$/.test(id)) {
       setBusy(true); setRestoring(true);
       fetch(`/api/experiences/${encodeURIComponent(id)}`, { signal: startup.signal }).then(async r => {
         if (!r.ok) throw new Error('This experience is not available in this browser. Start with a new question.');
-        const data = await r.json() as { experience: Experience };
+        const data = await readJsonResponse<{ experience: Experience }>(r);
         if (data.experience.status !== 'complete') throw new Error('This experience did not finish. Try your question again.');
         const parsed = experienceSpecSchema.safeParse(data.experience.spec);
         if (!parsed.success) throw new Error('This saved explanation could not be read. Please ask your question again.');
@@ -79,7 +94,7 @@ export function App() {
     setIntent(value); setBusy(true); setError(''); setTranscript(false); setNarrationState('');
     try {
       const response = await fetch('/api/experiences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intent: value.trim() }), signal: controller.current.signal });
-      const data = await response.json() as { experience?: Experience; error?: string };
+      const data = await readJsonResponse<{ experience?: Experience; error?: string }>(response);
       if (!response.ok || !data.experience) throw new Error(data.error || 'The experience could not be created. Please try again.');
       const next = data.experience;
       const parsed = experienceSpecSchema.safeParse(next.spec);
