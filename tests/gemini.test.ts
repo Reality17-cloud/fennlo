@@ -32,7 +32,7 @@ test('one native Gemini request pairs text and inline images for unrelated quest
       assert.ok(init?.signal);
       const body = JSON.parse(String(init?.body));
       assert.deepEqual(body.generationConfig.responseModalities, ['TEXT', 'IMAGE']);
-      assert.deepEqual(body.generationConfig.imageConfig, { imageSize: '1K', aspectRatio: '16:9' });
+      assert.deepEqual(body.generationConfig.responseFormat, { image: { imageSize: '1K', aspectRatio: '16:9' } });
       assert.equal(body.generationConfig.candidateCount, 1);
       assert.equal(body.generationConfig.maxOutputTokens, 4096);
       assert.equal(body.tools, undefined);
