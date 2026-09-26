@@ -31,13 +31,12 @@ test('one native Gemini request pairs text and inline images for unrelated quest
       assert.equal(url, 'https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite-image:generateContent');
       assert.ok(init?.signal);
       const body = JSON.parse(String(init?.body));
-      assert.deepEqual(body.generationConfig.responseModalities, ['TEXT', 'IMAGE']);
-      assert.deepEqual(body.generationConfig.responseFormat, { image: { imageSize: '1K', aspectRatio: '16:9' } });
-      assert.equal(body.generationConfig.candidateCount, 1);
-      assert.equal(body.generationConfig.maxOutputTokens, 4096);
+      assert.deepEqual(body.generationConfig, { responseModalities: ['TEXT', 'IMAGE'] });
+      assert.equal(body.systemInstruction, undefined);
       assert.equal(body.tools, undefined);
       assert.equal(body.generationConfig.responseSchema, undefined);
-      assert.equal(body.contents[0].parts[0].text, question);
+      assert.match(body.contents[0].parts[0].text, /Fennlo visual explanations/);
+      assert.ok(body.contents[0].parts[0].text.includes(question));
       assert.equal(String(init?.body).includes('fixture-secret'), false);
       return Response.json(transportFixture(development));
     };
