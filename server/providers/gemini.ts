@@ -14,8 +14,20 @@ const optionsSchema = z.object({
 });
 const partSchema = z.object({ text: z.string().optional(), thought: z.boolean().optional(), inlineData: z.object({ mimeType: z.string(), data: z.string().max(17_000_000) }).optional() }).passthrough();
 const responseSchema = z.object({ candidates: z.array(z.object({ finishReason: z.string(), content: z.object({ parts: z.array(partSchema).max(80) }) })).min(1).max(1), modelVersion: z.string().optional(), usageMetadata: z.record(z.unknown()).optional() }).passthrough();
+export type GeminiFailureCode = 'AUTH' | 'BILLING_OR_QUOTA' | 'BAD_REQUEST' | 'TIMEOUT' | 'UPSTREAM' | 'INVALID_RESPONSE';
+
 export class GeminiGenerationError extends Error {
-  constructor() { super('The image provider did not return a complete visual explanation. Please try again.'); this.name = 'GeminiGenerationError'; }
+  constructor(readonly code: GeminiFailureCode = 'INVALID_RESPONSE') {
+    super(
+      code === 'AUTH' ? 'Gemini rejected the API credential.'
+      : code === 'BILLING_OR_QUOTA' ? 'Gemini image generation is unavailable for this API project because billing or quota is not enabled.'
+      : code === 'BAD_REQUEST' ? 'Gemini rejected the image-generation request.'
+      : code === 'TIMEOUT' ? 'Gemini image generation timed out.'
+      : code === 'UPSTREAM' ? 'Gemini image generation is temporarily unavailable.'
+      : 'Gemini returned an incomplete visual explanation.'
+    );
+    this.name = 'GeminiGenerationError';
+  }
 }
 function instructions(maximum: number) {
   return `You create Fennlo visual explanations. Answer the human question accurately with native TEXT and IMAGE output in this ONE response. Choose the minimum essential points, normally 2 or 3 and never more than ${maximum}. For EACH point generate exactly one original explanatory image paired with concise native text. Images must explain the exact point's mechanism, causal relationship, architecture, structure, spatial relationship, or process. No decorative pictures, stock images, web search, external URLs, photos of a generic object, or unrelated atmosphere. Use a consistent sophisticated dark navy scientific visualization style, restrained blue/teal/amber accents, clear arrows and essential labels only, readable shapes, generous space. Keep detailed explanations out of the image. A CPU explanation must show actual instruction/data flow, not a beauty shot of a chip. The visual composition must be useful for this specific question, never force a subject template.
@@ -42,7 +54,17 @@ export class GeminiGenerativeProvider implements GenerativeProvider {
           responseFormat: { image: { aspectRatio: this.options.aspectRatio, imageSize: this.options.imageSize } },
         } }),
       });
-      if (!response.ok || Number(response.headers.get('content-length') ?? 0) > 55_000_000) throw new GeminiGenerationError();
+      if (!response.ok) {
+        const code: GeminiFailureCode =
+          response.status === 401 || response.status === 403 ? 'AUTH'
+          : response.status === 429 ? 'BILLING_OR_QUOTA'
+          : response.status === 400 ? 'BAD_REQUEST'
+          : 'UPSTREAM';
+        // Never persist or expose the upstream response body: it may contain sensitive project details.
+        await response.body?.cancel().catch(() => undefined);
+        throw new GeminiGenerationError(code);
+      }
+      if (Number(response.headers.get('content-length') ?? 0) > 55_000_000) throw new GeminiGenerationError('INVALID_RESPONSE');
       // Read a bounded body: image bytes never enter logs, the browser response, or ordinary DB fields.
       const reader = response.body?.getReader();
       if (!reader) throw new GeminiGenerationError();
@@ -56,7 +78,11 @@ export class GeminiGenerativeProvider implements GenerativeProvider {
         chunks.push(result.value);
       }
       return parseGeminiResponse(JSON.parse(Buffer.concat(chunks).toString('utf8')), this.options, intent);
-    } catch { throw new GeminiGenerationError(); }
+    } catch (error) {
+      if (error instanceof GeminiGenerationError) throw error;
+      if (error instanceof DOMException && error.name === 'TimeoutError') throw new GeminiGenerationError('TIMEOUT');
+      throw new GeminiGenerationError('INVALID_RESPONSE');
+    }
   }
 }
 
