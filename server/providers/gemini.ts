@@ -39,7 +39,7 @@ export class GeminiGenerativeProvider implements GenerativeProvider {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey }, signal: AbortSignal.timeout(this.options.timeoutMs),
         body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions(this.options.maxPoints) }] }, contents: [{ role: 'user', parts: [{ text: intent }] }], generationConfig: {
           candidateCount: 1, responseModalities: ['TEXT', 'IMAGE'], maxOutputTokens: 4096,
-          imageConfig: { aspectRatio: this.options.aspectRatio, imageSize: this.options.imageSize },
+          responseFormat: { image: { aspectRatio: this.options.aspectRatio, imageSize: this.options.imageSize } },
         } }),
       });
       if (!response.ok || Number(response.headers.get('content-length') ?? 0) > 55_000_000) throw new GeminiGenerationError();
