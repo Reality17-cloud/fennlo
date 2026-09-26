@@ -184,10 +184,13 @@ export function createApplication(options: ApplicationOptions) {
           return experience.complete(pending.id, { version: 1, title: answer.title, summary: `${answer.summary}\n\n${answer.points.map(p => `${p.title}\n${p.text}`).join('\n\n')}`, composition: 'explanation', palette: 'cosmos', nodes });
         }
         return experience.complete(pending.id, experienceSpecSchema.parse(generated));
-      } catch {
+      } catch (error) {
         for (const id of storedIds) { try { await artifact.delete(id); } catch { /* Keep safe failure semantics if cleanup also fails. */ } }
-        // Provider messages can contain credentials or upstream payloads. Persist only a stable public error.
-        return experience.fail(pending.id);
+        // Only preserve our own deliberately sanitized provider message; never persist raw upstream payloads.
+        const safeMessage = error instanceof Error && error.name === 'GeminiGenerationError'
+          ? error.message
+          : 'The experience could not be created. Please try again.';
+        return experience.fail(pending.id, safeMessage);
       }
     },
   };
